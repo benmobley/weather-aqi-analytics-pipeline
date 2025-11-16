@@ -49,7 +49,7 @@ daily_weather as (
         round(max(wind_speed_mph), 1) as max_wind_speed_mph,
         
         -- Cloud and visibility
-        round(avg(cloudiness_percent), 0) as avg_cloudiness_percent,
+        round(avg(cloudiness_percent), 0) as avg_cloudiness_percent, what t
         round(avg(visibility_meters), 0) as avg_visibility_meters,
         
         -- Weather conditions (most frequent)
