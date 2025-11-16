@@ -1,0 +1,41 @@
+FROM python:3.11-slim
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app
+
+# Set work directory
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        postgresql-client \
+        gcc \
+        python3-dev \
+        libpq-dev \
+        curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+RUN pip install --no-cache-dir \
+    streamlit>=1.28.0 \
+    pandas>=2.0.0 \
+    plotly>=5.15.0 \
+    psycopg2-binary>=2.9.7 \
+    sqlalchemy>=2.0.0 \
+    python-dotenv>=1.0.0
+
+# Copy the project
+COPY . .
+
+# Create non-root user
+RUN useradd --create-home --shell /bin/bash streamlit \
+    && chown -R streamlit:streamlit /app
+USER streamlit
+
+# Expose Streamlit port
+EXPOSE 8501
+
+CMD ["streamlit", "run", "dashboard/app.py", "--server.address", "0.0.0.0", "--server.port", "8501"]

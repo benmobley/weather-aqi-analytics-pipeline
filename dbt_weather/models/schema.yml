@@ -1,0 +1,185 @@
+version: 2
+
+sources:
+  - name: raw
+    description: "Raw data tables containing unprocessed API responses"
+    tables:
+      - name: weather_observations
+        description: "Raw weather and air quality observations from APIs"
+        columns:
+          - name: id
+            description: "Primary key for weather observations"
+            tests:
+              - unique
+              - not_null
+          - name: city
+            description: "City name"
+            tests:
+              - not_null
+          - name: country
+            description: "Country code"
+          - name: latitude
+            description: "Latitude coordinate"
+          - name: longitude
+            description: "Longitude coordinate"
+          - name: observation_time
+            description: "Time when the weather observation was recorded"
+            tests:
+              - not_null
+          - name: weather_data
+            description: "JSON data from weather API"
+            tests:
+              - not_null
+          - name: air_quality_data
+            description: "JSON data from air quality API"
+          - name: created_at
+            description: "Timestamp when record was inserted"
+            tests:
+              - not_null
+          - name: updated_at
+            description: "Timestamp when record was last updated"
+
+models:
+  - name: stg_weather__observations
+    description: "Staged weather observations with parsed JSON and data quality checks"
+    columns:
+      - name: id
+        description: "Primary key from raw table"
+        tests:
+          - unique
+          - not_null
+      - name: city
+        description: "Standardized city name"
+        tests:
+          - not_null
+      - name: temperature_celsius
+        description: "Temperature in Celsius with quality validation"
+        tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: -50
+                max_value: 60
+      - name: humidity_percent
+        description: "Humidity percentage with quality validation"
+        tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 100
+      - name: weather_category
+        description: "Categorized weather condition"
+        tests:
+          - accepted_values:
+              values: ['Clear', 'Cloudy', 'Rainy', 'Snowy', 'Stormy', 'Misty', 'Other']
+
+  - name: stg_air_quality__observations
+    description: "Staged air quality observations with normalized pollutant data"
+    columns:
+      - name: weather_observation_id
+        description: "Foreign key to weather observations"
+        tests:
+          - not_null
+      - name: pollutant_type
+        description: "Standardized pollutant name"
+        tests:
+          - accepted_values:
+              values: ['PM2.5', 'PM10', 'OZONE', 'CO', 'NO2', 'SO2']
+      - name: aqi_value
+        description: "Air Quality Index value"
+        tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 500
+      - name: aqi_category_standard
+        description: "Standardized AQI category"
+        tests:
+          - accepted_values:
+              values: ['Good', 'Moderate', 'Unhealthy for Sensitive Groups', 'Unhealthy', 'Very Unhealthy', 'Hazardous', 'Unknown']
+
+  - name: dim_city
+    description: "Dimension table containing city master data and metadata"
+    columns:
+      - name: city_id
+        description: "Unique identifier for city"
+        tests:
+          - unique
+          - not_null
+      - name: city
+        description: "City name"
+        tests:
+          - not_null
+      - name: country
+        description: "Country code"
+      - name: is_active
+        description: "Whether city has recent data"
+        tests:
+          - not_null
+      - name: data_quality_tier
+        description: "Data quality assessment"
+        tests:
+          - accepted_values:
+              values: ['Excellent', 'Good', 'Fair', 'Poor']
+
+  - name: fact_weather_daily
+    description: "Daily aggregated weather facts by city"
+    columns:
+      - name: daily_weather_id
+        description: "Unique identifier for daily weather record"
+        tests:
+          - unique
+          - not_null
+      - name: city_id
+        description: "Foreign key to dim_city"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_city')
+              field: city_id
+      - name: observation_date
+        description: "Date of weather observations"
+        tests:
+          - not_null
+      - name: avg_temperature_celsius
+        description: "Average daily temperature in Celsius"
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: -50
+              max_value: 60
+      - name: success_rate_percent
+        description: "Percentage of successful observations"
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 100
+
+  - name: fact_air_quality_daily
+    description: "Daily aggregated air quality facts by city"
+    columns:
+      - name: daily_aqi_id
+        description: "Unique identifier for daily AQI record"
+        tests:
+          - unique
+          - not_null
+      - name: city_id
+        description: "Foreign key to dim_city"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_city')
+              field: city_id
+      - name: observation_date
+        description: "Date of air quality observations"
+        tests:
+          - not_null
+      - name: overall_aqi_value
+        description: "Overall Air Quality Index for the day"
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 500
+      - name: overall_aqi_category
+        description: "Overall AQI health category"
+        tests:
+          - accepted_values:
+              values: ['Good', 'Moderate', 'Unhealthy for Sensitive Groups', 'Unhealthy', 'Very Unhealthy', 'Hazardous', 'Unknown']

@@ -1,0 +1,55 @@
+name: 'weather_analytics'
+version: '1.0.0'
+config-version: 2
+
+# This setting configures which "profile" dbt uses for this project.
+profile: 'weather_analytics'
+
+# These configurations specify where dbt should look for different types of files.
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+target-path: "target"  # directory which will store compiled SQL files
+clean-targets:         # directories to be removed by `dbt clean`
+  - "target"
+  - "dbt_packages"
+
+# Configuring models
+# Full documentation: https://docs.getdbt.com/docs/configuring-models
+models:
+  weather_analytics:
+    # Apply materializations and configurations
+    staging:
+      # Staging models should be views for faster development iteration
+      +materialized: view
+      +docs:
+        node_color: "lightblue"
+    marts:
+      # Marts should be tables for better query performance  
+      +materialized: table
+      +docs:
+        node_color: "lightgreen"
+
+# Variables that can be referenced in models
+vars:
+  # Date range for incremental models (development vs production)
+  start_date: '2024-01-01'
+  
+  # Data retention settings
+  days_to_retain: 365
+  
+  # API data quality thresholds
+  temperature_min: -50  # Celsius
+  temperature_max: 60   # Celsius
+  humidity_min: 0       # Percentage
+  humidity_max: 100     # Percentage
+  aqi_min: 0
+  aqi_max: 500
+
+# Test configurations
+tests:
+  +severity: 'warn'  # warn or error

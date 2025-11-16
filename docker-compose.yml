@@ -1,0 +1,111 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: weather_postgres
+    environment:
+      POSTGRES_DB: weather_db
+      POSTGRES_USER: weather_user
+      POSTGRES_PASSWORD: weather_pass
+      POSTGRES_HOST_AUTH_METHOD: trust
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U weather_user -d weather_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - weather_network
+
+  # Streamlit Dashboard
+  streamlit:
+    build:
+      context: .
+      dockerfile: Dockerfile.streamlit
+    container_name: weather_streamlit
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: weather_user
+      DB_PASSWORD: weather_pass
+      DB_NAME: weather_db
+    ports:
+      - "8501:8501"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./dashboard:/app/dashboard
+    working_dir: /app
+    command: streamlit run dashboard/app.py --server.address 0.0.0.0 --server.port 8501
+    networks:
+      - weather_network
+
+  # Python ETL Application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: weather_app
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: weather_user
+      DB_PASSWORD: weather_pass
+      DB_NAME: weather_db
+      OPENWEATHER_API_KEY: ${OPENWEATHER_API_KEY}
+      AIRNOW_API_KEY: ${AIRNOW_API_KEY}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - .:/app
+      - /app/src/__pycache__
+    working_dir: /app
+    command: >
+      sh -c "
+        echo 'Waiting for database to be ready...' &&
+        sleep 10 &&
+        python -c 'from src.db import init_db; init_db()' &&
+        echo 'Database initialized. Ready to run ETL processes.' &&
+        tail -f /dev/null
+      "
+    networks:
+      - weather_network
+
+  # dbt Service (optional, can run commands via app service)
+  dbt:
+    build:
+      context: .
+      dockerfile: Dockerfile.dbt
+    container_name: weather_dbt
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: weather_user
+      DB_PASSWORD: weather_pass
+      DB_NAME: weather_db
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./dbt_weather:/dbt_weather
+    working_dir: /dbt_weather
+    command: >
+      sh -c "
+        echo 'dbt service ready. Use: docker-compose exec dbt dbt run' &&
+        tail -f /dev/null
+      "
+    networks:
+      - weather_network
+
+volumes:
+  postgres_data:
+
+networks:
+  weather_network:
+    driver: bridge
